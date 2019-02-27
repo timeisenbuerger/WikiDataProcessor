@@ -16,4 +16,7 @@ dependencies {
 
     // https://mvnrepository.com/artifact/org.apache.spark/spark-core
     compile group: 'org.apache.spark', name: 'spark-core_2.12', version: '2.4.0'
+
+    // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
+    compile group: 'org.apache.spark', name: 'spark-sql_2.12', version: '2.4.0'
 }
