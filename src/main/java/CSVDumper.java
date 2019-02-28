@@ -16,6 +16,8 @@ import org.apache.spark.sql.types.StructType;
 
 public class CSVDumper
 {
+   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
+
    private static SparkContext sc;
    private static SQLContext sqlC;
    private static JavaSparkContext jsc;
@@ -55,72 +57,56 @@ public class CSVDumper
       });
    }
 
-   public void dumpPageCategoryLinksJoin() throws IOException
+   public void dumpAllDataInCsv() throws IOException
    {
-      String pagePath = "E:\\Entwicklung\\WikiDumps\\csv\\page.csv";
-      String categoryLinksPath = "E:\\Entwicklung\\WikiDumps\\csv\\categorylinks.csv";
+      String pagePath = CSV_DIRECTORY + "page.csv";
+      String categoryLinksPath = CSV_DIRECTORY + "categorylinks.csv";
 
-      SparkConf sparkConf = new SparkConf().setAppName("joinTables").setMaster("local[*]");
+      SparkConf sparkConf = new SparkConf().setAppName("dumpData").setMaster("local[*]");
       sc = new SparkContext(sparkConf);
 
       sqlC = new SQLContext(new SparkSession(sc));
 
       Dataset<Row> pageCsv = sqlC.read().schema(pageSchema).csv(pagePath);
       Dataset<Row> categoryLinksCsv = sqlC.read().schema(categoryLinksSchema).csv(categoryLinksPath);
+
+      pageCsv = pageCsv.select("page_id", "page_namespace", "page_title");
+      categoryLinksCsv = categoryLinksCsv.select("cl_from", "cl_to", "cl_type");
 
       Dataset<Row> joinedTable = pageCsv.join(categoryLinksCsv, pageCsv.col("page_id").equalTo(categoryLinksCsv.col("cl_from")));
 
-      joinedTable.write().csv("E:\\Entwicklung\\WikiDumps\\csv\\joined.csv");
       FileSystem fileSystem = FileSystem.get(sc.hadoopConfiguration());
-      FileUtil.copyMerge(fileSystem, new Path("E:\\Entwicklung\\WikiDumps\\csv\\joined.csv"), fileSystem,
-            new Path("E:\\Entwicklung\\WikiDumps\\csv\\merged.csv"), true, sc.hadoopConfiguration(), null
+
+      dumpPageCategoryLinksJoin(joinedTable, fileSystem);
+      dumpOnlySubcategories(joinedTable, fileSystem);
+      dumpOnlyArticleRelations(joinedTable, fileSystem);
+   }
+
+   private void dumpPageCategoryLinksJoin(Dataset<Row> joinedTable, FileSystem fileSystem) throws IOException
+   {
+      joinedTable.write().csv(CSV_DIRECTORY + "joined.csv");
+      FileUtil.copyMerge(fileSystem, new Path(CSV_DIRECTORY + "joined.csv"), fileSystem,
+            new Path(CSV_DIRECTORY + "page_categorylinks_joined.csv"), true, sc.hadoopConfiguration(), null
       );
    }
 
-   public void dumpOnlySubcategories() throws IOException
+   private void dumpOnlySubcategories(Dataset<Row> joinedTable, FileSystem fileSystem) throws IOException
    {
-      String pagePath = "E:\\Entwicklung\\WikiDumps\\csv\\page.csv";
-      String categoryLinksPath = "E:\\Entwicklung\\WikiDumps\\csv\\categorylinks.csv";
+      Dataset<Row> onlySubcategories = joinedTable.where("page_namespace = 14");
 
-      SparkConf sparkConf = new SparkConf().setAppName("onlySubcategories").setMaster("local[*]");
-      sc = new SparkContext(sparkConf);
-
-      sqlC = new SQLContext(new SparkSession(sc));
-
-      Dataset<Row> pageCsv = sqlC.read().schema(pageSchema).csv(pagePath);
-      Dataset<Row> categoryLinksCsv = sqlC.read().schema(categoryLinksSchema).csv(categoryLinksPath);
-
-      Dataset<Row> onlySubcategories = pageCsv.join(categoryLinksCsv, pageCsv.col("page_id").equalTo(categoryLinksCsv.col("cl_from")))
-            .where("page_namespace = 14");
-
-      onlySubcategories.write().csv("E:\\Entwicklung\\WikiDumps\\csv\\subcategories.csv");
-      FileSystem fileSystem = FileSystem.get(sc.hadoopConfiguration());
-      FileUtil.copyMerge(fileSystem, new Path("E:\\Entwicklung\\WikiDumps\\csv\\subcategories.csv"), fileSystem,
-            new Path("E:\\Entwicklung\\WikiDumps\\csv\\only_subcategories.csv"), true, sc.hadoopConfiguration(), null
+      onlySubcategories.write().csv(CSV_DIRECTORY + "subcategories.csv");
+      FileUtil.copyMerge(fileSystem, new Path(CSV_DIRECTORY + "subcategories.csv"), fileSystem,
+            new Path(CSV_DIRECTORY + "only_subcategories.csv"), true, sc.hadoopConfiguration(), null
       );
    }
 
-   public void dumpOnlyArticleRelations() throws IOException
+   private void dumpOnlyArticleRelations(Dataset<Row> joinedTable, FileSystem fileSystem) throws IOException
    {
-      String pagePath = "E:\\Entwicklung\\WikiDumps\\csv\\page.csv";
-      String categoryLinksPath = "E:\\Entwicklung\\WikiDumps\\csv\\categorylinks.csv";
-
-      SparkConf sparkConf = new SparkConf().setAppName("onlyArticleRelations").setMaster("local[*]");
-      sc = new SparkContext(sparkConf);
-
-      sqlC = new SQLContext(new SparkSession(sc));
-
-      Dataset<Row> pageCsv = sqlC.read().schema(pageSchema).csv(pagePath);
-      Dataset<Row> categoryLinksCsv = sqlC.read().schema(categoryLinksSchema).csv(categoryLinksPath);
-
-      Dataset<Row> joinedTable = pageCsv.join(categoryLinksCsv, pageCsv.col("page_id").equalTo(categoryLinksCsv.col("cl_from")));
-
       Dataset<Row> onlyArticleRelations = joinedTable.where("page_namespace = 0");
 
-      onlyArticleRelations.write().csv("E:\\Entwicklung\\WikiDumps\\csv\\article_relations.csv");
-      FileSystem fileSystem = FileSystem.get(sc.hadoopConfiguration());
-      FileUtil.copyMerge(fileSystem, new Path("E:\\Entwicklung\\WikiDumps\\csv\\article_relations.csv"), fileSystem,
-            new Path("E:\\Entwicklung\\WikiDumps\\csv\\only_article_relations.csv"), true, sc.hadoopConfiguration(), null
+      onlyArticleRelations.write().csv(CSV_DIRECTORY + "article_relations.csv");
+      FileUtil.copyMerge(fileSystem, new Path(CSV_DIRECTORY + "article_relations.csv"), fileSystem,
+            new Path(CSV_DIRECTORY + "only_article_relations.csv"), true, sc.hadoopConfiguration(), null
       );
    }
 }

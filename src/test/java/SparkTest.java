@@ -8,9 +8,6 @@ public class SparkTest
    public void test() throws IOException
    {
       CSVDumper csvDumper = new CSVDumper();
-
-      csvDumper.dumpPageCategoryLinksJoin();
-      csvDumper.dumpOnlySubcategories();
-      csvDumper.dumpOnlyArticleRelations();
+      csvDumper.dumpAllDataInCsv();
    }
 }
