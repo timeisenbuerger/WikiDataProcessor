@@ -5,7 +5,6 @@ import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -20,10 +19,13 @@ public class CSVDumper
 
    private static SparkContext sc;
    private static SQLContext sqlC;
-   private static JavaSparkContext jsc;
 
    private static StructType pageSchema;
    private static StructType categoryLinksSchema;
+
+   private String pagePath;
+   private String categoryLinksPath;
+   private SparkConf sparkConf;
 
    static
    {
@@ -57,16 +59,23 @@ public class CSVDumper
       });
    }
 
+   public CSVDumper()
+   {
+      init();
+   }
+
+   private void init()
+   {
+      pagePath = CSV_DIRECTORY + "page.csv";
+      categoryLinksPath = CSV_DIRECTORY + "categorylinks.csv";
+
+      sparkConf = new SparkConf().setAppName("dumpData").setMaster("local[*]");
+      sc = new SparkContext(sparkConf);
+      sqlC = new SQLContext(new SparkSession(sc));
+   }
+
    public void dumpAllDataInCsv() throws IOException
    {
-      String pagePath = CSV_DIRECTORY + "page.csv";
-      String categoryLinksPath = CSV_DIRECTORY + "categorylinks.csv";
-
-      SparkConf sparkConf = new SparkConf().setAppName("dumpData").setMaster("local[*]");
-      sc = new SparkContext(sparkConf);
-
-      sqlC = new SQLContext(new SparkSession(sc));
-
       Dataset<Row> pageCsv = sqlC.read().schema(pageSchema).csv(pagePath);
       Dataset<Row> categoryLinksCsv = sqlC.read().schema(categoryLinksSchema).csv(categoryLinksPath);
 
