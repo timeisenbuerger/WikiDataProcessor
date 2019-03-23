@@ -44,8 +44,11 @@ public class DumpAnalyzer
       sqlC = new SQLContext(new SparkSession(sc));
    }
 
-   private void analyzeArticlesRelatedToAnimals()
+   public void analyzeArticlesRelatedToAnimals()
    {
       Dataset<Row> joinedCsv = sqlC.read().schema(joinedTableSchema).csv(CSV_DIRECTORY + "page_categorylinks_joined.csv");
+
+      Dataset<Row> animals = joinedCsv.where("cl_from = 'Animals'");
+      animals.show();
    }
 }

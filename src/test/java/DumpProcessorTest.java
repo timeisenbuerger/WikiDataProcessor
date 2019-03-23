@@ -15,6 +15,6 @@ public class DumpProcessorTest
    public void testDumpAnalyzer()
    {
       DumpAnalyzer dumpAnalyzer = new DumpAnalyzer();
-
+      dumpAnalyzer.analyzeArticlesRelatedToAnimals();
    }
 }
