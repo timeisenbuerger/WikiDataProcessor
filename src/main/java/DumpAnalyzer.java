@@ -62,51 +62,75 @@ public class DumpAnalyzer
 
       List<String> resultList = animals.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING()).collectAsList();
 
+      //Zuordnung von Artikeln zu Ebenen
       Map<Integer, List<String>> levelArticlesMap = new HashMap<>();
+      //Wird genutzt, um bereits abgedeckte Subkategorien zu überspringen
+      List<String> coveredCategories = new ArrayList<>();
       int level = 0;
 
-      levelArticlesMap = collectLevelArticlesMap(joinedCsv, resultList, levelArticlesMap, level);
+      levelArticlesMap = collectLevelArticlesMap(joinedCsv, resultList, levelArticlesMap, coveredCategories, level);
 
-      System.out.println(levelArticlesMap);
+      for( Map.Entry<Integer, List<String>> entry : levelArticlesMap.entrySet() )
+      {
+         System.out.println(entry.getKey() + ":");
+         for( String s : entry.getValue() )
+         {
+            System.out.println(s);
+         }
+      }
    }
 
-   private Map<Integer, List<String>> collectLevelArticlesMap(Dataset<Row> joinedCsv, List<String> resultList, Map<Integer, List<String>> levelArticlesMap, int level)
+   private Map<Integer, List<String>> collectLevelArticlesMap(Dataset<Row> joinedCsv, List<String> resultList, Map<Integer, List<String>> levelArticlesMap, List<String> coveredCategories, int level)
    {
-      for( String row : resultList )
+      if(level < 3)
       {
-         List<String> columnValues = Arrays.asList(row.split(";"));
-         String page_title = columnValues.get(2);
-         String cl_to = columnValues.get(4);
-         String cl_type = columnValues.get(5);
-
-         if( cl_type.equals("page") )
+         for( String row : resultList )
          {
-            List<String> articlesForLevel = levelArticlesMap.get(level);
-            if( articlesForLevel == null )
+            List<String> columnValues = Arrays.asList(row.split(";"));
+            String page_title = columnValues.get(2);
+            String cl_type = columnValues.get(5);
+
+            //Dirty workaround, da es folgende Titel geben kann: Animals_of_Kha'ir. Würde eine SQL-Exception hervorrufen
+            if( page_title.contains("'") )
             {
-               articlesForLevel = new ArrayList<>();
+               continue;
             }
-            articlesForLevel.add(page_title);
 
-            levelArticlesMap.put(level, articlesForLevel);
-         }
-         else if( cl_type.equals("subcat") )
-         {
-            Dataset<Row> resultSet = joinedCsv.where("cl_to = '" + cl_to + "'");
-            List<String> list = resultSet.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING()).collectAsList();
-
-            levelArticlesMap = collectLevelArticlesMap(joinedCsv, list, levelArticlesMap, level + 1);
-         }
-         else if( cl_type.equals("null") )
-         {
-            List<String> articlesForLevel = levelArticlesMap.get(level);
-            if( articlesForLevel == null )
+            if( cl_type.equals("page") )
             {
-               articlesForLevel = new ArrayList<>();
-            }
-            articlesForLevel.add(page_title);
+               List<String> articlesForLevel = levelArticlesMap.get(level);
+               if( articlesForLevel == null )
+               {
+                  articlesForLevel = new ArrayList<>();
+               }
+               articlesForLevel.add(page_title);
 
-            levelArticlesMap.put(-1, articlesForLevel);
+               levelArticlesMap.put(level, articlesForLevel);
+            }
+            else if( cl_type.equals("subcat") )
+            {
+               //Subkategorien können von verschiedenen Artikeln/Subkategorien verlinkt sein, somit keine doppelte Ausführung
+               if( !coveredCategories.contains(page_title) )
+               {
+                  coveredCategories.add(page_title);
+
+                  Dataset<Row> resultSet = joinedCsv.where("cl_to = '" + page_title + "'");
+                  List<String> list = resultSet.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING()).collectAsList();
+
+                  levelArticlesMap = collectLevelArticlesMap(joinedCsv, list, levelArticlesMap, coveredCategories, level + 1);
+               }
+            }
+            else if( cl_type.equals("null") )
+            {
+               List<String> articlesForLevel = levelArticlesMap.get(level);
+               if( articlesForLevel == null )
+               {
+                  articlesForLevel = new ArrayList<>();
+               }
+               articlesForLevel.add(page_title);
+
+               levelArticlesMap.put(-1, articlesForLevel);
+            }
          }
       }
 
