@@ -14,7 +14,7 @@ public class DumpProcessorTest
    @Test
    public void testCSVDumperArticleTextAsCsv() throws IOException
    {
-      CSVDumper csvDumper = new CSVDumper(true);
+      CSVDumper csvDumper = new CSVDumper(false);
       csvDumper.dumpArticleTextAsCsv();
    }
 

@@ -1,10 +1,23 @@
+import edu.stanford.nlp.ling.Word;
+import edu.stanford.nlp.simple.Document;
+import edu.stanford.nlp.simple.Sentence;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import scala.Int;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,10 +38,7 @@ public class ArticlesAnalyzer
 
     static
     {
-        articlesSchema = new StructType(new StructField[]{
-                DataTypes.createStructField("articleName", DataTypes.StringType, true),
-                DataTypes.createStructField("articleContent", DataTypes.StringType, true)
-        });
+        articlesSchema = new StructType(new StructField[]{DataTypes.createStructField("articleName", DataTypes.StringType, true), DataTypes.createStructField("articleContent", DataTypes.StringType, true)});
     }
 
     private void init()
@@ -40,42 +50,78 @@ public class ArticlesAnalyzer
         sqlContext = new SQLContext(new SparkSession(sparkContext));
 
         // TODO update filename
-//        dataset = sparkSession.read().csv(CSV_DIRECTORY + "articles_csv.csv");
+        //        dataset = sparkSession.read().csv(CSV_DIRECTORY + "articles_csv.csv");
         dataset = sqlContext.read().schema(articlesSchema).csv(CSV_DIRECTORY + "articles_csv.csv");
     }
 
     public void countNouns(Map<Integer, List<String>> levelArticlesMap, boolean oncePerArticle)
     {
         String articleText;
-        for (Integer key: levelArticlesMap.keySet())
+        Document document;
+        List<String> tokens = new ArrayList<>();
+        List<List<String>> posTags = new ArrayList<>();
+        List<String> lemmas = new ArrayList<>();
+        Map<String, Integer> frequencies = new HashMap<>();
+
+        for (Integer key : levelArticlesMap.keySet())
         {
-            for (String articleName: levelArticlesMap.get(key))
+            for (String articleName : levelArticlesMap.get(key))
             {
-                articleText = dataset.select("articleContent").where("articleName = '" + articleName + "'").toString();
+                articleText = dataset
+                        .select("articleContent")
+                        .where("articleName = '" + articleName + "'")
+                        .map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING())
+                        .first();
 
-                // dataSet.map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING()).collectAsList();
+                document = new Document(articleText);
+                for(Sentence sentence : document.sentences())
+                {
+                    // pos tagging
+                    posTags.add(sentence.posTags());
+                }
 
-                // tokenization
+                for(List<String> sentence : posTags)
+                {
+                    for(String posTag : sentence)
+                    {
+                        // filter nouns
+                        if(posTag.charAt(0) == 'N')
+                        {
+                            int sentenceIndex = posTags.indexOf(sentence);
+                            int wordIndex = sentence.indexOf(posTag);
 
-                // pos tagging
-                // filter nouns
-                // lemmatization
-                // create a map to count occurences
-                // add to csv
+                            // lemmatization
+                            lemmas.add(document.sentence(sentenceIndex).lemma(wordIndex));
+                        }
+                    }
+                }
             }
         }
+        // create map from list
+        for (String lemma : lemmas)
+        {
+            if (frequencies.containsKey(lemma))
+            {
+                frequencies.put(lemma, frequencies.get(lemma) + 1);
+            }
+            else frequencies.put(lemma, 1);
+        }
+
+        // create csv from map
+        CsvWriter csvWriter = new CsvWriter();
+        csvWriter.createCsvFromMap(frequencies, CSV_DIRECTORY + "noun_frequencies.csv");
+
+        // visualize distribution in python (word clouds)
+        // TODO OPTION: count noun only once per article
+
     }
 
     // NOTES
     // use MLlib whenever possible
 
-    // NOUNS
-    // 1.
 
 
-    // visualize distribution (word clouds)
-    // 2.
-    // count noun only once per article
+
 
     // TOPICS
     // filter stop words from lemmas

@@ -28,8 +28,10 @@ import org.apache.spark.sql.types.StructType;
 
 public class CSVDumper implements Serializable
 {
-   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+//   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
+//   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+   private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv\\";
+   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text\\";
 
    private static SparkContext sc;
    private static SQLContext sqlC;

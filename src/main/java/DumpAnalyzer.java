@@ -18,8 +18,10 @@ import org.apache.spark.sql.types.StructType;
 
 public class DumpAnalyzer
 {
-   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+//   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
+//   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+   private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv\\";
+   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text\\";
 
    private static StructType joinedTableSchema;
 
