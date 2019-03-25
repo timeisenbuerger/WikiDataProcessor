@@ -19,4 +19,7 @@ dependencies {
 
     // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
     compile group: 'org.apache.spark', name: 'spark-sql_2.12', version: '2.4.0'
+
+    // https://mvnrepository.com/artifact/edu.stanford.nlp/stanford-corenlp
+    compile group: 'edu.stanford.nlp', name: 'stanford-corenlp', version: '3.9.2'
 }
