@@ -5,10 +5,17 @@ import org.junit.Test;
 public class DumpProcessorTest
 {
    @Test
-   public void testCSVDumper() throws IOException
+   public void testCSVDumperAllData() throws IOException
    {
-      CSVDumper csvDumper = new CSVDumper();
+      CSVDumper csvDumper = new CSVDumper(true);
       csvDumper.dumpAllDataInCsv();
+   }
+
+   @Test
+   public void testCSVDumperArticleTextAsCsv() throws IOException
+   {
+      CSVDumper csvDumper = new CSVDumper(true);
+      csvDumper.dumpArticleTextAsCsv();
    }
 
    @Test
