@@ -58,7 +58,6 @@ public class ArticlesAnalyzer
     {
         String articleText;
         Document document;
-        List<String> tokens = new ArrayList<>();
         List<List<String>> posTags = new ArrayList<>();
         List<String> lemmas = new ArrayList<>();
         Map<String, Integer> frequencies = new HashMap<>();
@@ -82,16 +81,17 @@ public class ArticlesAnalyzer
 
                 for(List<String> sentence : posTags)
                 {
-                    for(String posTag : sentence)
+                    for (int i = 0; i < sentence.size(); i++)
                     {
+                        String posTag = sentence.get(i);
+
                         // filter nouns
                         if(posTag.charAt(0) == 'N')
                         {
                             int sentenceIndex = posTags.indexOf(sentence);
-                            int wordIndex = sentence.indexOf(posTag);
 
                             // lemmatization
-                            lemmas.add(document.sentence(sentenceIndex).lemma(wordIndex));
+                            lemmas.add(document.sentence(sentenceIndex).lemma(i));
                         }
                     }
                 }
@@ -119,10 +119,6 @@ public class ArticlesAnalyzer
     // NOTES
     // use MLlib whenever possible
 
-
-
-
-
     // TOPICS
     // filter stop words from lemmas
     // prepare data (bow representation, dictionary...)
@@ -132,7 +128,53 @@ public class ArticlesAnalyzer
     // perform multiple times with varying number of levels (cumulative)
     // compare number of clusters and metrics
 
-    // NAMES
-    // NER on tokens
-    // visualize NER distribution
+    public void countNamedEntities(Map<Integer, List<String>> levelArticlesMap)
+    {
+        String articleText;
+        Document document;
+        List<String> namedEntities = new ArrayList<>();
+        Map<String, Integer> frequencies = new HashMap<>();
+
+        // TODO avoid duplicate code
+        for (Integer key : levelArticlesMap.keySet())
+        {
+            for (String articleName : levelArticlesMap.get(key))
+            {
+                articleText = dataset
+                        .select("articleContent")
+                        .where("articleName = '" + articleName + "'")
+                        .map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING())
+                        .first();
+
+                document = new Document(articleText);
+                for(Sentence sentence : document.sentences())
+                {
+                    // ner recognition
+                    for (int i = 0; i < sentence.nerTags().size(); i++)
+                    {
+                        String ner = sentence.nerTag(i);
+                        if(ner != "O")
+                        {
+                            namedEntities.add(sentence.word(i));
+                        }
+                    }
+                }
+            }
+
+            // TODO avoid duplicate code
+            // create map from list
+            for (String namedEntity : namedEntities)
+            {
+                if (frequencies.containsKey(namedEntity))
+                {
+                    frequencies.put(namedEntity, frequencies.get(namedEntity) + 1);
+                }
+                else frequencies.put(namedEntity, 1);
+            }
+
+            // create csv from map
+            CsvWriter csvWriter = new CsvWriter();
+            csvWriter.createCsvFromMap(frequencies, CSV_DIRECTORY + "named_entity_frequencies.csv");
+        }
+    }
 }
