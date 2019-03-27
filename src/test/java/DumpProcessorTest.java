@@ -1,3 +1,4 @@
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import org.junit.Test;
@@ -23,5 +24,19 @@ public class DumpProcessorTest
    {
       DumpAnalyzer dumpAnalyzer = new DumpAnalyzer();
       dumpAnalyzer.analyzeArticlesRelatedToAnimals();
+   }
+
+   @Test
+   public void testArticlesAnalyzer() throws FileNotFoundException
+   {
+      ArticlesAnalyzer articlesAnalyzer = new ArticlesAnalyzer();
+      articlesAnalyzer.analyzeArticleTexts();
+   }
+
+   @Test
+   public void merge() throws IOException
+   {
+      ArticlesAnalyzer articlesAnalyzer = new ArticlesAnalyzer();
+      articlesAnalyzer.merge();
    }
 }
