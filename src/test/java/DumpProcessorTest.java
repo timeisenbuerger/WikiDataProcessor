@@ -1,16 +1,27 @@
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import org.junit.Test;
 
 public class DumpProcessorTest
 {
+   /**
+    * CSV dumps erstellen
+    *
+    * @throws IOException
+    */
+
    @Test
    public void testCSVDumperAllData() throws IOException
    {
       CSVDumper csvDumper = new CSVDumper(true);
       csvDumper.dumpAllDataInCsv();
    }
+
+   /**
+    * Artikeltexte formatieren und in eine CSV Datei schreiben
+    *
+    * @throws IOException
+    */
 
    @Test
    public void testCSVDumperArticleTextAsCsv() throws IOException
@@ -19,6 +30,11 @@ public class DumpProcessorTest
       csvDumper.dumpArticleTextAsCsv();
    }
 
+   /**
+    * Zuordnung von Titeln und Leveln in Datei schreiben
+    *
+    */
+
    @Test
    public void testDumpAnalyzer()
    {
@@ -26,17 +42,17 @@ public class DumpProcessorTest
       dumpAnalyzer.analyzeArticlesRelatedToAnimals();
    }
 
+   /**
+    *
+    * Artikeltexte analysieren
+    *
+    * @throws IOException
+    */
+
    @Test
-   public void testArticlesAnalyzer() throws FileNotFoundException
+   public void testArticlesAnalyzer() throws IOException
    {
       ArticlesAnalyzer articlesAnalyzer = new ArticlesAnalyzer();
       articlesAnalyzer.analyzeArticleTexts();
-   }
-
-   @Test
-   public void merge() throws IOException
-   {
-      ArticlesAnalyzer articlesAnalyzer = new ArticlesAnalyzer();
-      articlesAnalyzer.merge();
    }
 }

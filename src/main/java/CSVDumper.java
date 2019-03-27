@@ -201,6 +201,13 @@ public class CSVDumper implements Serializable
 
       fixPartitionFiles(true);
       fixPartitionFiles(false);
+
+      System.out.println("Dateien wieder zusammenfassen");
+
+      FileSystem fileSystem = FileSystem.get(sc.hadoopConfiguration());
+      FileUtil.copyMerge(fileSystem, new Path(ARTICLE_TEXT_DIRECTORY + "article_text_csvs"), fileSystem,
+            new Path(ARTICLE_TEXT_DIRECTORY + "article_texts.csv"), true, sc.hadoopConfiguration(), null
+      );
    }
 
    private void fixPartitionFiles(boolean isFirstPass) throws IOException

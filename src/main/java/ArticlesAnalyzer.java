@@ -1,16 +1,19 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.Path;
+import edu.stanford.nlp.simple.Document;
+import edu.stanford.nlp.simple.Sentence;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.function.MapFunction;
@@ -58,26 +61,19 @@ public class ArticlesAnalyzer implements Serializable
 
    private void init()
    {
-      sparkConf = new SparkConf().setAppName("analyzeArticles").setMaster("local[*]");
+      sparkConf = new SparkConf().setAppName("analyzeArticles").setMaster("local[4]");
       sparkContext = new SparkContext(sparkConf);
       sqlContext = new SQLContext(new SparkSession(sparkContext));
    }
 
-   public void merge() throws IOException
-   {
-      FileSystem fileSystem = FileSystem.get(sparkContext.hadoopConfiguration());
-      FileUtil.copyMerge(fileSystem, new Path(ARTICLE_TEXT_DIRECTORY + "article_text_csvs"), fileSystem,
-            new Path(ARTICLE_TEXT_DIRECTORY + "article_texts.csv"), true, sparkContext.hadoopConfiguration(), null
-      );
-   }
-
-   public void analyzeArticleTexts() throws FileNotFoundException
+   public void analyzeArticleTexts() throws IOException
    {
       File levelArticleTitles = new File(CSV_DIRECTORY + "level_article_title.csv");
       if( levelArticleTitles.exists() )
       {
          BufferedReader bufferedReader = new BufferedReader(new FileReader(levelArticleTitles));
          List<String> lines = bufferedReader.lines().collect(Collectors.toList());
+         bufferedReader.close();
 
          Dataset<Row> articleTexts = sqlContext.read().schema(articlesSchema)
                .option("delimiter", ";")
@@ -89,7 +85,11 @@ public class ArticlesAnalyzer implements Serializable
             String level = line.split(";")[0];
             String titles = line.split(";")[1];
 
+            Map<String, Integer> nounsFrequencies = new HashMap<>();
+            Map<String, Integer> nameEntityFrequencies = new HashMap<>();
+
             List<String> titlesAsList = Arrays.asList(titles.split(","));
+
             for( String title : titlesAsList )
             {
                Dataset<String> possibleResult = articleTexts
@@ -100,141 +100,125 @@ public class ArticlesAnalyzer implements Serializable
 
                if( !possibleResult.isEmpty() )
                {
-                  possibleResult.show();
-                  System.out.println(possibleResult.first());
+                  String articleContent = possibleResult.first();
+
+                  nounsFrequencies = countNouns(articleContent, nounsFrequencies, false);
+                  nameEntityFrequencies = countNamedEntities(articleContent, nameEntityFrequencies);
                }
+            }
+
+            if( nounsFrequencies.size() > 0 && nameEntityFrequencies.size() > 0 )
+            {
+               writeMapAsCsv(nounsFrequencies, CSV_DIRECTORY + "nouns_frequencies" + level.split(" ")[1] + ".csv");
+               writeMapAsCsv(nameEntityFrequencies, CSV_DIRECTORY + "named_entity_frequencies" + level.split(" ")[1] + ".csv");
             }
          }
       }
    }
 
-   //private void countNouns(Map<Integer, List<String>> levelArticlesMap, boolean oncePerArticle)
-   //{
-   //   String articleText;
-   //   Document document;
-   //   List<List<String>> partOfSpeechTags = new ArrayList<>();
-   //   List<String> lemmas = new ArrayList<>();
-   //   Map<String, Integer> frequencies = new HashMap<>();
-   //
-   //   for( Integer key : levelArticlesMap.keySet() )
-   //   {
-   //      for( String articleName : levelArticlesMap.get(key) )
-   //      {
-   //         articleText = dataset
-   //               .select("articleContent")
-   //               .where("articleName = '" + articleName + "'")
-   //               .map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING())
-   //               .first();
-   //
-   //         document = new Document(articleText);
-   //         for( Sentence sentence : document.sentences() )
-   //         {
-   //            // pos tagging
-   //            partOfSpeechTags.add(sentence.posTags());
-   //         }
-   //
-   //         for( List<String> sentence : partOfSpeechTags )
-   //         {
-   //            for( int i = 0; i < sentence.size(); i++ )
-   //            {
-   //               String posTag = sentence.get(i);
-   //
-   //               // filter nouns
-   //               if( posTag.startsWith("N") )
-   //               {
-   //                  int sentenceIndex = partOfSpeechTags.indexOf(sentence);
-   //
-   //                  // lemmatization
-   //                  lemmas.add(document.sentence(sentenceIndex).lemma(i));
-   //               }
-   //            }
-   //         }
-   //      }
-   //   }
-   //   // create map from list
-   //   for( String lemma : lemmas )
-   //   {
-   //      if( frequencies.containsKey(lemma) )
-   //      {
-   //         frequencies.put(lemma, frequencies.get(lemma) + 1);
-   //      }
-   //      else
-   //      {
-   //         frequencies.put(lemma, 1);
-   //      }
-   //   }
-   //
-   //   // create csv from map
-   //   CsvWriter csvWriter = new CsvWriter();
-   //   csvWriter.createCsvFromMap(frequencies, CSV_DIRECTORY + "noun_frequencies.csv");
-   //
-   //   // visualize distribution in python (word clouds)
-   //   // TODO OPTION: count noun only once per article
-   //
-   //}
-   //
-   //// NOTES
-   //// use MLlib whenever possible
-   //
-   //// TOPICS
-   //// filter stop words from lemmas
-   //// prepare data (bow representation, dictionary...)
-   //// LDA
-   //// visualize clusters
-   //// cluster evaluation (mutual information/purity, silhouette, ...)
-   //// perform multiple times with varying number of levels (cumulative)
-   //// compare number of clusters and metrics
-   //
-   //private void countNamedEntities(Map<Integer, List<String>> levelArticlesMap)
-   //{
-   //   String articleText;
-   //   Document document;
-   //   List<String> namedEntities = new ArrayList<>();
-   //   Map<String, Integer> frequencies = new HashMap<>();
-   //
-   //   // TODO avoid duplicate code
-   //   for( Integer key : levelArticlesMap.keySet() )
-   //   {
-   //      for( String articleName : levelArticlesMap.get(key) )
-   //      {
-   //         articleText = dataset
-   //               .select("articleContent")
-   //               .where("articleName = '" + articleName + "'")
-   //               .map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING())
-   //               .first();
-   //
-   //         document = new Document(articleText);
-   //         for( Sentence sentence : document.sentences() )
-   //         {
-   //            // ner recognition
-   //            for( int i = 0; i < sentence.nerTags().size(); i++ )
-   //            {
-   //               String ner = sentence.nerTag(i);
-   //               if( !ner.equals("O") )
-   //               {
-   //                  namedEntities.add(sentence.word(i));
-   //               }
-   //            }
-   //         }
-   //      }
-   //
-   //      // TODO avoid duplicate code
-   //      // create map from list
-   //      for( String namedEntity : namedEntities )
-   //      {
-   //         if( frequencies.containsKey(namedEntity) )
-   //         {
-   //            frequencies.put(namedEntity, frequencies.get(namedEntity) + 1);
-   //         }
-   //         else
-   //         {
-   //            frequencies.put(namedEntity, 1);
-   //         }
-   //      }
-   //
-   //      // create csv from map
-   //      CsvWriter csvWriter = new CsvWriter();
-   //      csvWriter.createCsvFromMap(frequencies, CSV_DIRECTORY + "named_entity_frequencies.csv");
-   //   }
-   //}
+   private Map<String, Integer> countNouns(String articleContent, Map<String, Integer> frequencies, boolean oncePerArticle)
+   {
+      List<List<String>> partOfSpeechTags = new ArrayList<>();
+      List<String> lemmas = new ArrayList<>();
+
+      Document document = new Document(articleContent);
+      for( Sentence sentence : document.sentences() )
+      {
+         // pos tagging
+         partOfSpeechTags.add(sentence.posTags());
+      }
+
+      for( List<String> sentence : partOfSpeechTags )
+      {
+         for( int i = 0; i < sentence.size(); i++ )
+         {
+            String posTag = sentence.get(i);
+
+            // filter nouns
+            if( posTag.startsWith("N") )
+            {
+               int sentenceIndex = partOfSpeechTags.indexOf(sentence);
+
+               // lemmatization
+               lemmas.add(document.sentence(sentenceIndex).lemma(i));
+            }
+         }
+      }
+
+      // create map from list
+      aggregateMapEntry(frequencies, lemmas);
+
+      return frequencies;
+
+      // visualize distribution in python (word clouds)
+      // TODO OPTION: count noun only once per article
+   }
+
+   // NOTES
+   // use MLlib whenever possible
+
+   // TOPICS
+   // filter stop words from lemmas
+   // prepare data (bow representation, dictionary...)
+   // LDA
+   // visualize clusters
+   // cluster evaluation (mutual information/purity, silhouette, ...)
+   // perform multiple times with varying number of levels (cumulative)
+   // compare number of clusters and metrics
+
+   private Map<String, Integer> countNamedEntities(String articleContent, Map<String, Integer> frequencies)
+   {
+      List<String> namedEntities = new ArrayList<>();
+
+      Document document = new Document(articleContent);
+      for( Sentence sentence : document.sentences() )
+      {
+         // ner recognition
+         for( int i = 0; i < sentence.nerTags().size(); i++ )
+         {
+            String ner = sentence.nerTag(i);
+            if( !ner.equals("O") )
+            {
+               namedEntities.add(sentence.word(i));
+            }
+         }
+
+         // create map from list
+         aggregateMapEntry(frequencies, namedEntities);
+      }
+
+      return frequencies;
+   }
+
+   private void aggregateMapEntry(Map<String, Integer> frequencies, List<String> elements)
+   {
+      for( String element : elements )
+      {
+         if( frequencies.containsKey(element) )
+         {
+            frequencies.put(element, frequencies.get(element) + 1);
+         }
+         else
+         {
+            frequencies.put(element, 1);
+         }
+      }
+   }
+
+   private void writeMapAsCsv(Map<String, Integer> frequencies, String filepath) throws IOException
+   {
+      File file = new File(filepath);
+      if( !file.exists() )
+      {
+         file.createNewFile();
+      }
+
+      BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+      for( Map.Entry<String, Integer> entry : frequencies.entrySet() )
+      {
+         bufferedWriter.write(entry.getKey() + "," + entry.getValue());
+         bufferedWriter.newLine();
+      }
+      bufferedWriter.close();
+   }
 }
