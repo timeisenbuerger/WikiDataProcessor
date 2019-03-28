@@ -36,7 +36,7 @@ public class DumpProcessorTest
     */
 
    @Test
-   public void testDumpAnalyzer()
+   public void testDumpAnalyzer() throws IOException
    {
       DumpAnalyzer dumpAnalyzer = new DumpAnalyzer();
       dumpAnalyzer.analyzeArticlesRelatedToAnimals();

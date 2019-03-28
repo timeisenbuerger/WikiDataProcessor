@@ -1,3 +1,7 @@
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -56,7 +60,7 @@ public class DumpAnalyzer
       sqlC = new SQLContext(new SparkSession(sc));
    }
 
-   public void analyzeArticlesRelatedToAnimals()
+   public void analyzeArticlesRelatedToAnimals() throws IOException
    {
       Dataset<Row> joinedCsv = sqlC.read().schema(joinedTableSchema).csv(CSV_DIRECTORY + "page_categorylinks_joined.csv");
       joinedCsv.cache();
@@ -72,14 +76,27 @@ public class DumpAnalyzer
 
       levelArticlesMap = collectLevelArticlesMap(joinedCsv, resultList, levelArticlesMap, coveredCategories, level);
 
+      File file = new File(CSV_DIRECTORY + "level_article_title.csv");
+      BufferedWriter bfw = new BufferedWriter(new FileWriter(file));
       for( Map.Entry<Integer, List<String>> entry : levelArticlesMap.entrySet() )
       {
-         System.out.println(entry.getKey() + ":");
-         for( String s : entry.getValue() )
+         bfw.write("Ebene " + entry.getKey() + ";");
+
+         for( int i = 0; i < entry.getValue().size(); i++ )
          {
-            System.out.println(s);
+            String page_title = entry.getValue().get(i);
+
+            if( i != (entry.getValue().size() - 1) )
+            {
+               page_title += ",";
+            }
+
+            bfw.write(page_title);
          }
+
+         bfw.newLine();
       }
+      bfw.flush();
    }
 
    private Map<Integer, List<String>> collectLevelArticlesMap(Dataset<Row> joinedCsv, List<String> resultList, Map<Integer, List<String>> levelArticlesMap, List<String> coveredCategories, int level)
