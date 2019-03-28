@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -28,10 +30,10 @@ import org.apache.spark.sql.types.StructType;
 
 public class CSVDumper implements Serializable
 {
-//   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
-//   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
-   private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text\\";
+   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
+   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+//   private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv\\";
+//   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text\\";
 
    private static SparkContext sc;
    private static SQLContext sqlC;
@@ -164,9 +166,10 @@ public class CSVDumper implements Serializable
 
                   File file = new File(ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\article_text" + count + ".csv");
 
-
                   BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
-                  String articleLine = "";
+                  String articleTitle = "";
+                  String articleContent = "";
+                  CSVPrinter csvPrinter = new CSVPrinter(bufferedWriter, CSVFormat.newFormat(';'));
 
                   while( t.hasNext() )
                   {
@@ -178,24 +181,27 @@ public class CSVDumper implements Serializable
 
                      if( line.startsWith("#Article") )
                      {
-                        if( articleLine.isEmpty() )
+                        if( articleTitle.isEmpty() )
                         {
-                           articleLine += line.replace("#Article: ", "") + ";";
+                           articleTitle += line.replace("#Article: ", "");
                         }
                         else
                         {
-                           bufferedWriter.write(articleLine);
+                           csvPrinter.printRecord(articleTitle, articleContent);
                            bufferedWriter.newLine();
 
-                           articleLine = line.replace("#Article: ", "") + ";";
+                           articleTitle = line.replace("#Article: ", "");
+                           articleContent = "";
                         }
                      }
                      else
                      {
-                        articleLine += line.replace(";", "").trim();
+                        articleContent += line.replace(";", "").trim();
                      }
                   }
-                  bufferedWriter.flush();
+
+                  csvPrinter.flush();
+                  csvPrinter.close();
                }
             });
 
