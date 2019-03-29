@@ -28,4 +28,6 @@ dependencies {
 
     // https://mvnrepository.com/artifact/databricks/spark-corenlp
 //    compile group: 'databricks', name: 'spark-corenlp', version: '0.4.0-spark2.4-scala2.11'
+
+    compile "org.apache.commons:commons-csv:1.6"
 }
