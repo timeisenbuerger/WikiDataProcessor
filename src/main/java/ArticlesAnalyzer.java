@@ -16,9 +16,8 @@ import edu.stanford.nlp.simple.Document;
 import edu.stanford.nlp.simple.Sentence;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
-import org.apache.spark.api.java.function.MapFunction;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoders;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
@@ -28,8 +27,8 @@ import org.apache.spark.sql.types.StructType;
 
 public class ArticlesAnalyzer implements Serializable
 {
-   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
+   private static final String CSV_DIRECTORY = "D:\\Entwicklung\\PTT\\csv\\";
+   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Entwicklung\\PTT\\extracted_text\\";
    //private static final String TXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text";
    //private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv";
    private static final String TEMP_DIRECTORY = CSV_DIRECTORY + "\\temp";
@@ -37,6 +36,7 @@ public class ArticlesAnalyzer implements Serializable
    private static SparkConf sparkConf;
    private static SparkContext sparkContext;
    private static SQLContext sqlContext;
+   private static JavaSparkContext jsc;
 
    private static StructType levelTitleSchema;
    private static StructType articlesSchema;
@@ -54,6 +54,9 @@ public class ArticlesAnalyzer implements Serializable
       });
    }
 
+   Map<String, Integer> nounsFrequencies = new HashMap<>();
+   Map<String, Integer> nameEntityFrequencies = new HashMap<>();
+
    public ArticlesAnalyzer()
    {
       init();
@@ -61,9 +64,10 @@ public class ArticlesAnalyzer implements Serializable
 
    private void init()
    {
-      sparkConf = new SparkConf().setAppName("analyzeArticles").setMaster("local[4]");
+      sparkConf = new SparkConf().setAppName("analyzeArticles").setMaster("local[*]");
       sparkContext = new SparkContext(sparkConf);
       sqlContext = new SQLContext(new SparkSession(sparkContext));
+      jsc = new JavaSparkContext(sparkContext);
    }
 
    public void analyzeArticleTexts() throws IOException
@@ -75,48 +79,38 @@ public class ArticlesAnalyzer implements Serializable
          List<String> lines = bufferedReader.lines().collect(Collectors.toList());
          bufferedReader.close();
 
-         Dataset<Row> articleTexts = sqlContext.read().schema(articlesSchema)
-               .option("delimiter", ";")
-               .csv(ARTICLE_TEXT_DIRECTORY + "article_texts.csv")
-               .cache();
-
+         List<String> titles = new ArrayList<>();
          for( String line : lines )
          {
-            String level = line.split(";")[0];
-            String titles = line.split(";")[1];
-
-            Map<String, Integer> nounsFrequencies = new HashMap<>();
-            Map<String, Integer> nameEntityFrequencies = new HashMap<>();
-
-            List<String> titlesAsList = Arrays.asList(titles.split(","));
-
-            for( String title : titlesAsList )
-            {
-               Dataset<String> possibleResult = articleTexts
-                     .select("articleContent")
-                     .where("articleTitle = '" + title.replace("_", " ") + "'")
-                     .limit(1)
-                     .map((MapFunction<Row, String>) entry -> entry.mkString(), Encoders.STRING());
-
-               if( !possibleResult.isEmpty() )
-               {
-                  String articleContent = possibleResult.first();
-
-                  nounsFrequencies = countNouns(articleContent, nounsFrequencies, false);
-                  nameEntityFrequencies = countNamedEntities(articleContent, nameEntityFrequencies);
-               }
-            }
-
-            if( nounsFrequencies.size() > 0 && nameEntityFrequencies.size() > 0 )
-            {
-               writeMapAsCsv(nounsFrequencies, CSV_DIRECTORY + "nouns_frequencies" + level.split(" ")[1] + ".csv");
-               writeMapAsCsv(nameEntityFrequencies, CSV_DIRECTORY + "named_entity_frequencies" + level.split(" ")[1] + ".csv");
-            }
+            String title = line.split(";")[1].replace("_", " ");
+            titles.addAll(Arrays.asList(title.split(",")));
          }
+
+         Broadcast<Map<String, Integer>> broadcastNounsFrequencies = jsc.broadcast(nounsFrequencies);
+         Broadcast<Map<String, Integer>> broadcastNamedFrequencies = jsc.broadcast(nameEntityFrequencies);
+
+         sqlContext.read().schema(articlesSchema)
+               .option("delimiter", ";")
+               .csv(ARTICLE_TEXT_DIRECTORY + "article_texts.csv")
+               .filter((Row x) -> titles.contains(x.get(0)))
+               .dropDuplicates()
+               .foreach((Row x) -> {
+                  countNouns((String) x.get(1), broadcastNounsFrequencies.getValue(), false);
+                  countNamedEntities((String) x.get(1), broadcastNamedFrequencies.getValue());
+               });
+
+         sqlContext.read().csv(CSV_DIRECTORY + "level_article_title.csv");
+
+         System.out.println("Jetzt schreibe ich");
+         System.out.println("Nouns +" + broadcastNounsFrequencies.getValue().size());
+         System.out.println("NamedEntities +" + broadcastNamedFrequencies.getValue().size());
+
+         writeMapAsCsv(broadcastNounsFrequencies.getValue(), CSV_DIRECTORY + "nouns_frequencies.csv");
+         writeMapAsCsv(broadcastNamedFrequencies.getValue(), CSV_DIRECTORY + "named_entity_frequencies.csv");
       }
    }
 
-   private Map<String, Integer> countNouns(String articleContent, Map<String, Integer> frequencies, boolean oncePerArticle)
+   private void countNouns(String articleContent, Map<String, Integer> frequencies, boolean oncePerArticle)
    {
       List<List<String>> partOfSpeechTags = new ArrayList<>();
       List<String> lemmas = new ArrayList<>();
@@ -147,9 +141,6 @@ public class ArticlesAnalyzer implements Serializable
 
       // create map from list
       aggregateMapEntry(frequencies, lemmas);
-
-      return frequencies;
-
       // visualize distribution in python (word clouds)
       // TODO OPTION: count noun only once per article
    }
@@ -166,7 +157,7 @@ public class ArticlesAnalyzer implements Serializable
    // perform multiple times with varying number of levels (cumulative)
    // compare number of clusters and metrics
 
-   private Map<String, Integer> countNamedEntities(String articleContent, Map<String, Integer> frequencies)
+   private void countNamedEntities(String articleContent, Map<String, Integer> frequencies)
    {
       List<String> namedEntities = new ArrayList<>();
 
@@ -186,8 +177,6 @@ public class ArticlesAnalyzer implements Serializable
          // create map from list
          aggregateMapEntry(frequencies, namedEntities);
       }
-
-      return frequencies;
    }
 
    private void aggregateMapEntry(Map<String, Integer> frequencies, List<String> elements)
@@ -219,6 +208,7 @@ public class ArticlesAnalyzer implements Serializable
          bufferedWriter.write(entry.getKey() + "," + entry.getValue());
          bufferedWriter.newLine();
       }
+      bufferedWriter.flush();
       bufferedWriter.close();
    }
 }
