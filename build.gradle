@@ -25,9 +25,7 @@ dependencies {
 
     // https://mvnrepository.com/artifact/edu.stanford.nlp/stanford-corenlp-models
     compile group: 'edu.stanford.nlp', name: 'stanford-corenlp', version: '3.9.2', classifier: 'models'
-
-    // https://mvnrepository.com/artifact/databricks/spark-corenlp
-//    compile group: 'databricks', name: 'spark-corenlp', version: '0.4.0-spark2.4-scala2.11'
-
+    
+    // CSVPrinter
     compile "org.apache.commons:commons-csv:1.6"
 }

@@ -16,53 +16,29 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
 
-public class DumpAnalyzer
+public class DumpProcessor
 {
-//   private static final String CSV_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\csv\\";
-//   private static final String ARTICLE_TEXT_DIRECTORY = "E:\\Entwicklung\\WikiDumps\\article_xml\\extracted_text\\";
-   private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text\\";
-
-   private static StructType joinedTableSchema;
-
-   private static SparkContext sc;
-   private static SQLContext sqlC;
-
-   static
-   {
-      joinedTableSchema = new StructType(new StructField[]{
-            DataTypes.createStructField("page_id", DataTypes.StringType, true),
-            DataTypes.createStructField("page_namespace", DataTypes.StringType, true),
-            DataTypes.createStructField("page_title", DataTypes.StringType, true),
-            DataTypes.createStructField("cl_from", DataTypes.StringType, true),
-            DataTypes.createStructField("cl_to", DataTypes.StringType, true),
-            DataTypes.createStructField("cl_type", DataTypes.StringType, true)
-      });
-   }
-
-   //Page id von Animals: 21143238
-
    private SparkConf sparkConf;
+   private SparkContext sparkContext;
+   private SQLContext sqlContext;
 
-   public DumpAnalyzer()
+   public DumpProcessor()
    {
       init();
    }
 
    private void init()
    {
-      sparkConf = new SparkConf().setAppName("analyzeData").setMaster("local[*]");
-      sc = new SparkContext(sparkConf);
-      sqlC = new SQLContext(new SparkSession(sc));
+      sparkConf = new SparkConf().setAppName("processData").setMaster("local[*]");
+      sparkContext = new SparkContext(sparkConf);
+      sqlContext = new SQLContext(new SparkSession(sparkContext));
    }
 
-   public void analyzeArticlesRelatedToAnimals() throws IOException
+   public void collectArticlesRelatedToAnimals() throws IOException
    {
-      Dataset<Row> joinedCsv = sqlC.read().schema(joinedTableSchema).csv(CSV_DIRECTORY + "page_categorylinks_joined.csv");
+      Dataset<Row> joinedCsv = sqlContext.read().schema(SchemaConstants.joinedTableSchema)
+            .csv(PathConstants.CSV_DIRECTORY + "page_categorylinks_joined.csv");
       joinedCsv.cache();
       Dataset<Row> animals = joinedCsv.where("cl_to = 'Animals'");
 
@@ -74,9 +50,15 @@ public class DumpAnalyzer
       List<String> coveredCategories = new ArrayList<>();
       int level = 0;
 
+      //Hier kein Spark genutzt, da in einer Rekursion dasselbe Dataset (joinedCsv) auf dem wir arbeiten nicht nochmal verwendet werden kann
       levelArticlesMap = collectLevelArticlesMap(joinedCsv, resultList, levelArticlesMap, coveredCategories, level);
 
-      File file = new File(CSV_DIRECTORY + "level_article_title.csv");
+      writeLevelsTitlesFile(levelArticlesMap);
+   }
+
+   private void writeLevelsTitlesFile(Map<Integer, List<String>> levelArticlesMap) throws IOException
+   {
+      File file = new File(PathConstants.CSV_DIRECTORY + "level_article_title.csv");
       BufferedWriter bfw = new BufferedWriter(new FileWriter(file));
       for( Map.Entry<Integer, List<String>> entry : levelArticlesMap.entrySet() )
       {
@@ -101,7 +83,8 @@ public class DumpAnalyzer
 
    private Map<Integer, List<String>> collectLevelArticlesMap(Dataset<Row> joinedCsv, List<String> resultList, Map<Integer, List<String>> levelArticlesMap, List<String> coveredCategories, int level)
    {
-      if(level < 3)
+      //nur bis level 3, da das sammeln der Daten sonst viel zu lange dauern würde
+      if( level < 3 )
       {
          for( String row : resultList )
          {
@@ -109,13 +92,13 @@ public class DumpAnalyzer
             String page_title = columnValues.get(2);
             String cl_type = columnValues.get(5);
 
-            //Dirty workaround, da es folgende Titel geben kann: Animals_of_Kha'ir. Würde eine SQL-Exception hervorrufen
+            //Dirty workaround, da es folgende Titel geben kann: Kha'ir. Würde eine SQL-Exception hervorrufen
             if( page_title.contains("'") )
             {
                continue;
             }
 
-            if( cl_type.equals("page") )
+            if( cl_type.equals("page") || cl_type.equals("null") )
             {
                List<String> articlesForLevel = levelArticlesMap.get(level);
                if( articlesForLevel == null )
@@ -124,7 +107,7 @@ public class DumpAnalyzer
                }
                articlesForLevel.add(page_title);
 
-               levelArticlesMap.put(level, articlesForLevel);
+               levelArticlesMap.put(cl_type.equals("page") ? level : -level, articlesForLevel);
             }
             else if( cl_type.equals("subcat") )
             {
@@ -138,17 +121,6 @@ public class DumpAnalyzer
 
                   levelArticlesMap = collectLevelArticlesMap(joinedCsv, list, levelArticlesMap, coveredCategories, level + 1);
                }
-            }
-            else if( cl_type.equals("null") )
-            {
-               List<String> articlesForLevel = levelArticlesMap.get(level);
-               if( articlesForLevel == null )
-               {
-                  articlesForLevel = new ArrayList<>();
-               }
-               articlesForLevel.add(page_title);
-
-               levelArticlesMap.put(-1, articlesForLevel);
             }
          }
       }

@@ -14,11 +14,12 @@ public class DumpProcessorTest
    public void testCSVDumperAllData() throws IOException
    {
       CSVDumper csvDumper = new CSVDumper(true);
-      csvDumper.dumpAllDataInCsv();
+      csvDumper.dumpAllDumpDataInCsv();
    }
 
    /**
-    * Artikeltexte formatieren und in eine CSV Datei schreiben
+    * Artikeltexte formatieren und in eine CSV Datei schreiben.
+    * Nur mit einer Sparkpartition, da sonst die Artikeltexte getrennt werden und nicht mehr zuzuordnen sind
     *
     * @throws IOException
     */
@@ -36,10 +37,17 @@ public class DumpProcessorTest
     */
 
    @Test
-   public void testDumpAnalyzer() throws IOException
+   public void testDumpProcessor() throws IOException
    {
-      DumpAnalyzer dumpAnalyzer = new DumpAnalyzer();
-      dumpAnalyzer.analyzeArticlesRelatedToAnimals();
+      DumpProcessor dumpAnalyzer = new DumpProcessor();
+      dumpAnalyzer.collectArticlesRelatedToAnimals();
+   }
+
+   @Test
+   public void testCSVDumperNeededTitlesWithContent() throws IOException
+   {
+      CSVDumper csvDumper = new CSVDumper(true);
+      csvDumper.dumpNeededTitlesWithContent();
    }
 
    /**

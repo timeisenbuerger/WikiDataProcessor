@@ -1,6 +1,7 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -14,6 +15,9 @@ import java.util.stream.Collectors;
 
 import edu.stanford.nlp.simple.Document;
 import edu.stanford.nlp.simple.Sentence;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -21,41 +25,13 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
 
 public class ArticlesAnalyzer implements Serializable
 {
-   private static final String CSV_DIRECTORY = "D:\\Entwicklung\\PTT\\csv\\";
-   private static final String ARTICLE_TEXT_DIRECTORY = "D:\\Entwicklung\\PTT\\extracted_text\\";
-   //private static final String TXT_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\extracted_text";
-   //private static final String CSV_DIRECTORY = "D:\\Uni\\05-ws1819\\PTT\\wikidata\\csv";
-   private static final String TEMP_DIRECTORY = CSV_DIRECTORY + "\\temp";
-
    private static SparkConf sparkConf;
    private static SparkContext sparkContext;
    private static SQLContext sqlContext;
    private static JavaSparkContext jsc;
-
-   private static StructType levelTitleSchema;
-   private static StructType articlesSchema;
-
-   static
-   {
-      levelTitleSchema = new StructType(new StructField[]{
-            DataTypes.createStructField("level", DataTypes.StringType, true),
-            DataTypes.createStructField("titles", DataTypes.StringType, true)
-      });
-
-      articlesSchema = new StructType(new StructField[]{
-            DataTypes.createStructField("articleTitle", DataTypes.StringType, true),
-            DataTypes.createStructField("articleContent", DataTypes.StringType, true)
-      });
-   }
-
-   Map<String, Integer> nounsFrequencies = new HashMap<>();
-   Map<String, Integer> nameEntityFrequencies = new HashMap<>();
 
    public ArticlesAnalyzer()
    {
@@ -72,7 +48,7 @@ public class ArticlesAnalyzer implements Serializable
 
    public void analyzeArticleTexts() throws IOException
    {
-      File levelArticleTitles = new File(CSV_DIRECTORY + "level_article_title.csv");
+      File levelArticleTitles = new File(PathConstants.CSV_DIRECTORY + "level_article_title.csv");
       if( levelArticleTitles.exists() )
       {
          BufferedReader bufferedReader = new BufferedReader(new FileReader(levelArticleTitles));
@@ -86,12 +62,17 @@ public class ArticlesAnalyzer implements Serializable
             titles.addAll(Arrays.asList(title.split(",")));
          }
 
+
+         Map<String, Integer> nounsFrequencies = new HashMap<>();
+         Map<String, Integer> nameEntityFrequencies = new HashMap<>();
+
+         //broadcast through partitions so values can be written
          Broadcast<Map<String, Integer>> broadcastNounsFrequencies = jsc.broadcast(nounsFrequencies);
          Broadcast<Map<String, Integer>> broadcastNamedFrequencies = jsc.broadcast(nameEntityFrequencies);
 
-         sqlContext.read().schema(articlesSchema)
+         sqlContext.read().schema(SchemaConstants.articlesSchema)
                .option("delimiter", ";")
-               .csv(ARTICLE_TEXT_DIRECTORY + "article_texts.csv")
+               .csv(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_texts.csv")
                .filter((Row x) -> titles.contains(x.get(0)))
                .dropDuplicates()
                .foreach((Row x) -> {
@@ -99,15 +80,41 @@ public class ArticlesAnalyzer implements Serializable
                   countNamedEntities((String) x.get(1), broadcastNamedFrequencies.getValue());
                });
 
-         sqlContext.read().csv(CSV_DIRECTORY + "level_article_title.csv");
+         sqlContext.read().csv(PathConstants.CSV_DIRECTORY + "level_article_title.csv");
 
          System.out.println("Jetzt schreibe ich");
          System.out.println("Nouns +" + broadcastNounsFrequencies.getValue().size());
          System.out.println("NamedEntities +" + broadcastNamedFrequencies.getValue().size());
 
-         writeMapAsCsv(broadcastNounsFrequencies.getValue(), CSV_DIRECTORY + "nouns_frequencies.csv");
-         writeMapAsCsv(broadcastNamedFrequencies.getValue(), CSV_DIRECTORY + "named_entity_frequencies.csv");
+         writeMapAsCsv(broadcastNounsFrequencies.getValue(), PathConstants.CSV_DIRECTORY + "nouns_frequencies.csv");
+         writeMapAsCsv(broadcastNamedFrequencies.getValue(), PathConstants.CSV_DIRECTORY + "named_entity_frequencies.csv");
+
+         sqlContext.read().schema(SchemaConstants.articlesSchema)
+               .option("delimiter", ";")
+               .csv(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_texts.csv")
+               .filter((Row x) -> titles.contains(x.get(0)))
+               .dropDuplicates().write().option("delimiter", ";").csv(PathConstants.CSV_DIRECTORY + "neededArticleTitlesAndContents.csv");
+
+         FileSystem fileSystem = FileSystem.get(sparkContext.hadoopConfiguration());
+         FileUtil.copyMerge(fileSystem, new Path(PathConstants.CSV_DIRECTORY + "neededArticleTitlesAndContents.csv"), fileSystem,
+               new Path(PathConstants.CSV_DIRECTORY + "needed_article_titles_and_contents.csv"), true, sparkContext.hadoopConfiguration(), null
+         );
       }
+   }
+
+   private List<String> filterLemmas(String articleContent) throws FileNotFoundException
+   {
+      Document document = new Document(articleContent);
+      List<String> allLemmas = new ArrayList<>();
+      for( Sentence sentence : document.sentences() )
+      {
+         allLemmas.addAll(sentence.lemmas());
+      }
+
+      BufferedReader bufferedReader = new BufferedReader(new FileReader(new File("E:\\Entwicklung\\WikiDataProcessor\\lib\\stopwords.txt")));
+      List<String> stopwordList = bufferedReader.lines().collect(Collectors.toList());
+
+      return allLemmas.stream().filter(lemma -> lemma.length() > 3 && !stopwordList.contains(lemma)).collect(Collectors.toList());
    }
 
    private void countNouns(String articleContent, Map<String, Integer> frequencies, boolean oncePerArticle)
