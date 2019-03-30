@@ -5,7 +5,7 @@ import org.junit.Test;
 public class DumpProcessorTest
 {
    /**
-    * CSV dumps erstellen
+    * Hier werden die joined-csv Dateien von page.csv und categorylinks.csv erstellt
     *
     * @throws IOException
     */
@@ -42,6 +42,12 @@ public class DumpProcessorTest
       DumpProcessor dumpAnalyzer = new DumpProcessor();
       dumpAnalyzer.collectArticlesRelatedToAnimals();
    }
+
+   /**
+    * Hier werden die benötigten Artikeltexte ermittelt und exportiert
+    *
+    * @throws IOException
+    */
 
    @Test
    public void testCSVDumperNeededTitlesWithContent() throws IOException
