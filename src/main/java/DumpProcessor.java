@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.function.MapFunction;
@@ -40,17 +42,20 @@ public class DumpProcessor
       Dataset<Row> joinedCsv = sqlContext.read().schema(SchemaConstants.joinedTableSchema)
             .csv(PathConstants.CSV_DIRECTORY + "page_categorylinks_joined.csv");
       joinedCsv.cache();
+
       Dataset<Row> animals = joinedCsv.where("cl_to = 'Animals'");
 
       List<String> resultList = animals.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING()).collectAsList();
 
       //Zuordnung von Artikeln zu Ebenen
       Map<Integer, List<String>> levelArticlesMap = new HashMap<>();
+
       //Wird genutzt, um bereits abgedeckte Subkategorien zu überspringen
       List<String> coveredCategories = new ArrayList<>();
       int level = 0;
 
-      //Hier kein Spark genutzt, da in einer Rekursion dasselbe Dataset (joinedCsv) auf dem wir arbeiten nicht nochmal verwendet werden kann
+      //Hier keine Sparkpartitionen genutzt, da in einer Rekursion dasselbe Dataset (joinedCsv) auf dem wir arbeiten nicht nochmal verwendet werden kann
+      //Es entsteht immer eine NullPointerException
       levelArticlesMap = collectLevelArticlesMap(joinedCsv, resultList, levelArticlesMap, coveredCategories, level);
 
       writeLevelsTitlesFile(levelArticlesMap);
@@ -59,10 +64,11 @@ public class DumpProcessor
    private void writeLevelsTitlesFile(Map<Integer, List<String>> levelArticlesMap) throws IOException
    {
       File file = new File(PathConstants.CSV_DIRECTORY + "level_article_title.csv");
-      BufferedWriter bfw = new BufferedWriter(new FileWriter(file));
+      BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+      CSVPrinter csvPrinter = new CSVPrinter(bufferedWriter, CSVFormat.newFormat(';'));
       for( Map.Entry<Integer, List<String>> entry : levelArticlesMap.entrySet() )
       {
-         bfw.write("Ebene " + entry.getKey() + ";");
+         String titles = "";
 
          for( int i = 0; i < entry.getValue().size(); i++ )
          {
@@ -73,12 +79,15 @@ public class DumpProcessor
                page_title += ",";
             }
 
-            bfw.write(page_title);
+            titles += page_title;
          }
 
-         bfw.newLine();
+         csvPrinter.printRecord("Ebene " + entry.getKey(), titles);
+         bufferedWriter.newLine();
       }
-      bfw.flush();
+      csvPrinter.close();
+      bufferedWriter.flush();
+      bufferedWriter.close();
    }
 
    private Map<Integer, List<String>> collectLevelArticlesMap(Dataset<Row> joinedCsv, List<String> resultList, Map<Integer, List<String>> levelArticlesMap, List<String> coveredCategories, int level)
@@ -98,6 +107,8 @@ public class DumpProcessor
                continue;
             }
 
+            //Es gibt Einträge mit cl_type = null. Hier kann man nicht definieren, ob es eine page oder subcat ist; wir gehen von einer page aus.
+            //Falls es eine subcat ist, dann wird es später nicht in der titles_article_content.csv gefunden
             if( cl_type.equals("page") || cl_type.equals("null") )
             {
                List<String> articlesForLevel = levelArticlesMap.get(level);
