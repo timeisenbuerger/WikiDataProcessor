@@ -148,21 +148,7 @@ public class ArticlesAnalyzer implements Serializable
 
       // create map from list
       aggregateMapEntry(frequencies, lemmas);
-      // visualize distribution in python (word clouds)
-      // TODO OPTION: count noun only once per article
    }
-
-   // NOTES
-   // use MLlib whenever possible
-
-   // TOPICS
-   // filter stop words from lemmas
-   // prepare data (bow representation, dictionary...)
-   // LDA
-   // visualize clusters
-   // cluster evaluation (mutual information/purity, silhouette, ...)
-   // perform multiple times with varying number of levels (cumulative)
-   // compare number of clusters and metrics
 
    private void countNamedEntities(String articleContent, Map<String, Integer> frequencies)
    {
