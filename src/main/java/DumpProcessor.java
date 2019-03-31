@@ -118,7 +118,7 @@ public class DumpProcessor
                }
                articlesForLevel.add(page_title);
 
-               levelArticlesMap.put(cl_type.equals("page") ? level : -level, articlesForLevel);
+               levelArticlesMap.put(level, articlesForLevel);
             }
             else if( cl_type.equals("subcat") )
             {
