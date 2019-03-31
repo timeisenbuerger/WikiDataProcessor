@@ -1,6 +1,6 @@
 # Repository: WikiDataProcessor
 
-## How to run the application
+## Wie man die Anwendung ausführt
 
 ### Vorbereitungen
 Um die Prozesse der Datenverarbeitung dieser Applikation nutzen zu können, sind folgende Schritte vorher nötig:
@@ -29,11 +29,19 @@ Falls Fehler bei dem Export der zur Analyse benötigten CSV-Dateien aufkamen und
 Hier befinden sich unsere Versuche mit der Stanford Nlp Bibliothek die Texte zu analysieren. Da dabei teilweise aber nur komische Daten bei raus kamen, haben wir uns dazu entschieden die Analyse in Python durchzuführen.
 
 ### Datenanalyse und Visualisierung mit Python
-Anitas Text
+#### Benötigte Libraries
+- jupyter notebook
+- numpy
+- pandas
+- matplotlib
+- nltk
+- gensim
+- pyLDAvis
 
+Öffne die "article_analysis.ipynb" mit Jupyter Notebook. Zu Beginn des Programms öffnet sich ein Fenster. Wähle in der Liste bitte "all" aus und klicke anschließend auf den "Download" Button. Dadurch werden die nötigen Packages für NLTK heruntergeladen.  
 
 ## Hypothese und Diskussion der Ergebnisse
-Dieser Bereich ist in dem Jupyter Notebook zu finden.
+Im Jupyter Notebook legen wir unsere Hypothesen dar und evaluieren diese unter Anbetracht der Ergebnisse. 
 
 ## Probleme und Hindernisse, die bei der Implementation auftraten
 
@@ -44,3 +52,6 @@ Leider haben wir nirgendwo gefunden, dass Spark erlaubt, die map-Funktion eines 
 Falls ihr zu diesem Problem eine sinnvolle und effizientere Lösung habt, als unsere, würden wir es begrüßen, wenn wir eine Info darüber bekommen.
 Aufgrund dieses Problems ist diese Methode wegen der großen Datenmenge ineffizient gestaltet (da nicht mit mehreren Partitionen gearbeitet werden kann) und damit wir keine Laufzeit von mehr als einem Tag (bei level < 5) haben, mussten wir die Rekursionstiefe (level < 3) beschränken.
 Dadurch kommt es zu einer geringeren Menge an Artikeln, die in Relation zu der Kategorie 'Animals' stehen.
+
+### Topic Modeling in Abhängigkeit zur Artikeltiefe
+Wir haben versucht, Topic Modelle mit nur den ersten paar Ebenen zu erstellen, jedoch entstand dadurch ein unbehebbarer Index Error. Der Algorithmus funktionierte nur, wenn der gesamte Datensatz verwendet wurde. 
