@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -121,6 +123,7 @@ public class CSVDumper implements Serializable
                File file = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\article_text" + count + ".csv");
 
                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+               CSVPrinter csvPrinter = new CSVPrinter(bufferedWriter, CSVFormat.newFormat(';'));
                String articleTitle = "";
                String articleContent = "";
                String contentFromLastPartiton = "";
@@ -137,14 +140,14 @@ public class CSVDumper implements Serializable
                   {
                      if( articleTitle.isEmpty() )
                      {
-                        bufferedWriter.write(contentFromLastPartiton);
+                        csvPrinter.printRecord(contentFromLastPartiton);
                         bufferedWriter.newLine();
 
                         articleTitle += line.replace("#Article: ", "") + ";";
                      }
                      else
                      {
-                        bufferedWriter.write(articleTitle + articleContent);
+                        csvPrinter.printRecord(articleTitle + articleContent);
                         bufferedWriter.newLine();
 
                         articleTitle = line.replace("#Article: ", "") + ";";
@@ -166,6 +169,7 @@ public class CSVDumper implements Serializable
 
                bufferedWriter.flush();
                bufferedWriter.close();
+               csvPrinter.close();
             });
 
       File[] fileArray = dir.listFiles();

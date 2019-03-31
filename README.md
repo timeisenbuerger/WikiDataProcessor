@@ -23,20 +23,14 @@ Wurden diese Anpassungen gemacht, kann nun die Klasse 'DumpProcessorTest' (src/t
 4. testCSVDumperNeededTitlesWithContent() >> Durch diese Methode werden die benötigten Artikeltexte ermittelt und als 'needed_article_titles_and_contents.csv' gespeichert
 
 Damit sind alle benötigten Schritte zur Datenanalyse durchgeführt.
+Falls Fehler bei dem Export der zur Analyse benötigten CSV-Dateien aufkamen und die Daten nicht richtig exportiert wurden, dann gibt es in diesem Projek einen csv-Ordner mit den benötigten CSV-Dateien.
 
 ### Datenanalyse und Visualisierung mit Python
 Anitas Text
 
 
 ## Hypothese und Diskussion der Ergebnisse
-
-### Hypothese
-
-### Leitfragen und Antworten
-
-### Threats to validity
-
-### Future work
+Dieser Bereich ist in dem Jupyter Notebook zu finden.
 
 ## Probleme und Hindernisse, die bei der Implementation auftraten
 
