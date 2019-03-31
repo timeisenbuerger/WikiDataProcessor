@@ -25,6 +25,9 @@ Wurden diese Anpassungen gemacht, kann nun die Klasse 'DumpProcessorTest' (src/t
 Damit sind alle benötigten Schritte zur Datenanalyse durchgeführt.
 Falls Fehler bei dem Export der zur Analyse benötigten CSV-Dateien aufkamen und die Daten nicht richtig exportiert wurden, dann gibt es in diesem Projek einen csv-Ordner mit den benötigten CSV-Dateien.
 
+### Klasse: ArticlesAnalyzer
+Hier befinden sich unsere Versuche mit der Stanford Nlp Bibliothek die Texte zu analysieren. Da dabei teilweise aber nur komische Daten bei raus kamen, haben wir uns dazu entschieden die Analyse in Python durchzuführen.
+
 ### Datenanalyse und Visualisierung mit Python
 Anitas Text
 
