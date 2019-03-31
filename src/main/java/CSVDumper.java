@@ -7,12 +7,10 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -107,64 +105,82 @@ public class CSVDumper implements Serializable
    {
       Dataset<Row> rows = sqlContext.read().text(PathConstants.ARTICLE_TEXT_DIRECTORY + "articles_in_plain_text.txt");
 
-      rows.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING()).foreachPartition(
-            new ForeachPartitionFunction<String>()
+      File dir = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\");
+      if( !dir.exists() )
+      {
+         dir.mkdir();
+      }
+
+      rows.map((MapFunction<Row, String>) entry -> entry.mkString(";"), Encoders.STRING())
+            .foreachPartition((ForeachPartitionFunction<String>) t ->
             {
-               @Override
-               public void call(Iterator<String> t) throws Exception
+               int count = dir.listFiles().length;
+
+               System.out.println("Schreibe Datei " + count);
+
+               File file = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\article_text" + count + ".csv");
+
+               BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+               String articleTitle = "";
+               String articleContent = "";
+               String contentFromLastPartiton = "";
+
+               while( t.hasNext() )
                {
-                  File dir = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\");
-                  if( !dir.exists() )
+                  String line = t.next();
+                  if( line.isEmpty() || line.startsWith("#Subtitle") || line.startsWith("#Type") )
                   {
-                     dir.mkdir();
+                     continue;
                   }
-                  int count = dir.listFiles().length;
 
-                  System.out.println("Schreibe Datei " + count);
-
-                  File file = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\article_text" + count + ".csv");
-
-                  BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
-                  String articleTitle = "";
-                  String articleContent = "";
-                  CSVPrinter csvPrinter = new CSVPrinter(bufferedWriter, CSVFormat.newFormat(';'));
-
-                  while( t.hasNext() )
+                  if( line.startsWith("#Article") )
                   {
-                     String line = t.next();
-                     if( line.isEmpty() || line.startsWith("#Subtitle") || line.startsWith("#Type") )
+                     if( articleTitle.isEmpty() )
                      {
-                        continue;
+                        bufferedWriter.write(contentFromLastPartiton);
+                        bufferedWriter.newLine();
+
+                        articleTitle += line.replace("#Article: ", "") + ";";
                      }
-
-                     if( line.startsWith("#Article") )
+                     else
                      {
-                        if( articleTitle.isEmpty() )
-                        {
-                           articleTitle += line.replace("#Article: ", "");
-                        }
-                        else
-                        {
-                           csvPrinter.printRecord(articleTitle, articleContent);
-                           bufferedWriter.newLine();
+                        bufferedWriter.write(articleTitle + articleContent);
+                        bufferedWriter.newLine();
 
-                           articleTitle = line.replace("#Article: ", "");
-                           articleContent = "";
-                        }
+                        articleTitle = line.replace("#Article: ", "") + ";";
+                        articleContent = "";
+                     }
+                  }
+                  else
+                  {
+                     if( articleTitle.isEmpty() )
+                     {
+                        contentFromLastPartiton += line.replace(";", "").trim();
                      }
                      else
                      {
                         articleContent += line.replace(";", "").trim();
                      }
                   }
-
-                  csvPrinter.flush();
-                  csvPrinter.close();
                }
+
+               bufferedWriter.flush();
+               bufferedWriter.close();
             });
 
-      fixPartitionFiles(true);
-      fixPartitionFiles(false);
+      File[] fileArray = dir.listFiles();
+      Arrays.sort(fileArray, (o1, o2) -> {
+         Integer value1 = Integer.valueOf(o1.getName().substring(o1.getName().lastIndexOf("t") + 1, o1.getName().lastIndexOf(".csv")));
+         Integer value2 = Integer.valueOf(o2.getName().substring(o2.getName().lastIndexOf("t") + 1, o2.getName().lastIndexOf(".csv")));
+         return value1.compareTo(value2);
+      });
+      List<File> files = Arrays.asList(fileArray);
+
+      //Dateien müssen korrigiert werden, da in Partitionen geschrieben wurde und dabei zusammenhängende Artikeltexte getrennt wurden
+      for( int i = 0; i < files.size() - 1; i++ )
+      {
+         fixPartitionFiles(files.get(i + 1), files.get(i));
+      }
 
       System.out.println("Dateien wieder zusammenfassen");
 
@@ -174,121 +190,54 @@ public class CSVDumper implements Serializable
       );
    }
 
-   private void fixPartitionFiles(boolean isFirstPass) throws IOException
+   private void fixPartitionFiles(File fileFrom, File fileTo) throws IOException
    {
-      File dir = new File(PathConstants.ARTICLE_TEXT_DIRECTORY + "article_text_csvs\\");
-      if( dir.exists() )
+      System.out.println("Bearbeitung von " + fileTo.getName() + " und " + fileFrom.getName());
+
+      List<String> linesToMove = new ArrayList<>();
+      List<String> linesFileFrom = readLines(fileFrom);
+      for( String line : linesFileFrom )
       {
-         if( isFirstPass )
+         if( line.contains(";") )
          {
-            System.out.println("Erster Durchlauf");
-
-            List<File> files = Arrays.asList(dir.listFiles());
-            for( int i = 0; i < files.size(); i += 2 )
-            {
-               System.out.println("Bearbeitung von " + i + " und " + (i + 1));
-
-               File fileTo = files.get(i);
-               File fileFrom = files.get(i + 1);
-
-               List<String> linesToMove = new ArrayList<>();
-               List<String> linesFileFrom = readLines(fileFrom);
-               for( String line : linesFileFrom )
-               {
-                  if( line.contains(";") )
-                  {
-                     break;
-                  }
-                  else
-                  {
-                     linesToMove.add(line);
-                  }
-               }
-
-               linesFileFrom.removeAll(linesToMove);
-
-               List<String> linesFileTo = readLines(fileTo);
-               String lastLine = linesFileTo.get(linesFileTo.size() - 1);
-               for( int j = 0; j < linesToMove.size(); j++ )
-               {
-                  String lineToMove = linesToMove.get(j);
-                  if( j == 0 )
-                  {
-                     lastLine += " " + lineToMove;
-                  }
-                  else
-                  {
-                     lastLine += linesToMove;
-                  }
-               }
-               linesFileTo.set(linesFileTo.size() - 1, lastLine);
-
-               System.out.println("Datei 1 neu beschreiben");
-
-               BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(fileTo));
-               rewriteFile(linesFileTo, bufferedWriter);
-
-               System.out.println("Datei 2 neu beschreiben");
-
-               bufferedWriter = new BufferedWriter(new FileWriter(fileFrom));
-               rewriteFile(linesFileFrom, bufferedWriter);
-            }
+            break;
          }
          else
          {
-            System.out.println("Zweiter Durchlauf");
-
-            List<File> files = Arrays.asList(dir.listFiles());
-            for( int i = 2; i < files.size(); i += 2 )
-            {
-               System.out.println("Bearbeitung von " + i + " und " + (i + 1));
-
-               File fileFrom = files.get(i);
-               File fileTo = files.get(i - 1);
-
-               List<String> linesToMove = new ArrayList<>();
-               List<String> linesFileFrom = readLines(fileTo);
-               for( String line : linesFileFrom )
-               {
-                  if( line.contains(";") )
-                  {
-                     break;
-                  }
-                  else
-                  {
-                     linesToMove.add(line);
-                  }
-               }
-
-               linesFileFrom.removeAll(linesToMove);
-
-               List<String> linesFileTo = readLines(fileTo);
-               String lastLine = linesFileTo.get(linesFileTo.size() - 1);
-               for( int j = 0; j < linesToMove.size(); j++ )
-               {
-                  String lineToMove = linesToMove.get(j);
-                  if( j == 0 )
-                  {
-                     lastLine += " " + lineToMove;
-                  }
-                  else
-                  {
-                     lastLine += linesToMove;
-                  }
-               }
-               linesFileTo.set(linesFileTo.size() - 1, lastLine);
-
-               System.out.println("Datei 1 neu beschreiben");
-
-               BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(fileTo));
-               rewriteFile(linesFileTo, bufferedWriter);
-
-               System.out.println("Datei 2 neu beschreiben");
-
-               bufferedWriter = new BufferedWriter(new FileWriter(fileFrom));
-               rewriteFile(linesFileFrom, bufferedWriter);
-            }
+            linesToMove.add(line);
          }
+      }
+      linesFileFrom.removeAll(linesToMove);
+
+      List<String> linesFileTo = readLines(fileTo);
+      String lastLine = linesFileTo.get(linesFileTo.size() - 1);
+      for( int j = 0; j < linesToMove.size(); j++ )
+      {
+         String lineToMove = linesToMove.get(j);
+         if( j == 0 )
+         {
+            lastLine += " " + lineToMove;
+         }
+         else
+         {
+            lastLine += lineToMove;
+         }
+      }
+      linesFileTo.set(linesFileTo.size() - 1, lastLine);
+
+      if( !linesToMove.isEmpty() )
+      {
+         System.out.println("Datei 1 neu beschreiben");
+
+         BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(fileTo));
+         rewriteFile(linesFileTo, bufferedWriter);
+
+         System.out.println("Datei 2 neu beschreiben");
+
+         bufferedWriter = new BufferedWriter(new FileWriter(fileFrom));
+         rewriteFile(linesFileFrom, bufferedWriter);
+
+         bufferedWriter.close();
       }
    }
 
@@ -329,11 +278,14 @@ public class CSVDumper implements Serializable
       for( int j = 0; j < linesFile1.size(); j++ )
       {
          String line = linesFile1.get(j);
-         bufferedWriter.write(line);
-
-         if( j != linesFile1.size() - 1 )
+         if( !line.isEmpty() )
          {
-            bufferedWriter.newLine();
+            bufferedWriter.write(line);
+
+            if( j != linesFile1.size() - 1 )
+            {
+               bufferedWriter.newLine();
+            }
          }
       }
       bufferedWriter.flush();
@@ -346,14 +298,6 @@ public class CSVDumper implements Serializable
          return new ArrayList<>();
       }
       BufferedReader reader = new BufferedReader(new FileReader(file));
-      List<String> results = new ArrayList<>();
-      String line = reader.readLine();
-      while( line != null )
-      {
-         results.add(line);
-         line = reader.readLine();
-      }
-      return results;
+      return reader.lines().collect(Collectors.toList());
    }
-
 }

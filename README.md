@@ -38,5 +38,12 @@ Anitas Text
 
 ### Future work
 
-## Bestehende Probleme bei der Implementation
- 
+## Probleme und Hindernisse, die bei der Implementation auftraten
+
+### Rekursion mit Spark
+In der Methode testDumpProcessor() muss rekursiv nach Artikeln gesucht werden, welche wiederrum auf einen anderen Artikel verweisen und so weiter, bis man auf einen Artikel mit cl_type = page trifft.
+Dabei wird ein Dataset verwendet, welches den Inhalt der 'page_categorylinks_joined.csv' enthält. Somit müsste man mit Hilfe von Spark in der Rekursion wieder mit dem entsprechenden Dataset arbeiten.
+Leider haben wir nirgendwo gefunden, dass Spark erlaubt, die map-Funktion eines Datasets rekursiv einzusetzen (dabei tritt immer eine NullPointerException auf) oder es eine andere Lösung für unser Problem gibt.
+Falls ihr zu diesem Problem eine sinnvolle und effizientere Lösung habt, als unsere, würden wir es begrüßen, wenn wir eine Info darüber bekommen.
+Aufgrund dieses Problems ist diese Methode wegen der großen Datenmenge ineffizient gestaltet (da nicht mit mehreren Partitionen gearbeitet werden kann) und damit wir keine Laufzeit von mehr als einem Tag (bei level < 5) haben, mussten wir die Rekursionstiefe (level < 3) beschränken.
+Dadurch kommt es zu einer geringeren Menge an Artikeln, die in Relation zu der Kategorie 'Animals' stehen.
